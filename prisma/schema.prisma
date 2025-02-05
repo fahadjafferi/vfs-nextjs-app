@@ -1,0 +1,52 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  name      String?
+  hashedPassword  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("User")
+}
+
+model Loan {
+  id                   String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId               String    @db.ObjectId
+  loanAmount           Float
+  interestRate         Float
+  loanTerm             Int
+  monthlyPayment       Float
+  loanStatus           String    @default("Pending")
+  startDate            DateTime?
+  endDate              DateTime?
+  outstandingBalance   Float
+  vin                  String
+  make                 String
+  model                String
+  year                 Int
+  mileage              Int?
+  condition            String?
+  vehiclePrice         Float
+  downPayment          Float?
+  dealerName           String?
+  dealerAddress        String?
+  dealerContact        String?
+  loanType             String?
+  insuranceProvider    String?
+  policyNumber         String?
+  coSignerName         String?
+  coSignerContact      String?
+  notes                String?
+
+  @@map("loans")
+}
+
