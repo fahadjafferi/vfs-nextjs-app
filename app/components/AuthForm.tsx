@@ -4,8 +4,6 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,33 +15,56 @@ type AuthFormProps = {
   mode: "login" | "register";
 };
 
-const loginSchema = z.object({
-  email: z.string().email({ message: "Invalid email address" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters long" }),
-});
-
-const registerSchema = loginSchema.extend({
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
+type FormData = {
+  email: string;
+  password: string;
+  confirmPassword?: string; // Only used in register mode
+};
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const schema = mode === "login" ? loginSchema : registerSchema;
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm({
-    resolver: zodResolver(schema),
-  });
+    setError,
+  } = useForm<FormData>();
 
-  const onSubmit = async (data: z.infer<typeof schema>) => {
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePassword = (password: string) => {
+    return password.length >= 6;
+  };
+
+  const validateConfirmPassword = (password: string, confirmPassword: string) => {
+    return password === confirmPassword;
+  };
+
+  const onSubmit = async (data: FormData) => {
     setServerError(null);
+
+    // Validate email
+    if (!validateEmail(data.email)) {
+      setError("email", { type: "manual", message: "Invalid email address" });
+      return;
+    }
+
+    // Validate password
+    if (!validatePassword(data.password)) {
+      setError("password", { type: "manual", message: "Password must be at least 6 characters long" });
+      return;
+    }
+
+    // Validate confirm password (only for register mode)
+    if (mode === "register" && !validateConfirmPassword(data.password, data.confirmPassword!)) {
+      setError("confirmPassword", { type: "manual", message: "Passwords don't match" });
+      return;
+    }
 
     if (mode === "login") {
       const result = await signIn("credentials", {
@@ -52,10 +73,8 @@ export function AuthForm({ mode }: AuthFormProps) {
         password: data.password,
       });
 
-      console.log("SignIn Result:", result); // Debugging
-
       if (result?.ok) {
-        router.push("/"); 
+        router.push("/");
       } else {
         setServerError("Invalid email or password");
       }
@@ -73,7 +92,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         });
 
         if (response.ok) {
-          router.push("/login"); 
+          router.push("/login");
         } else {
           const errorData = await response.json();
           setServerError(errorData.error || "Registration failed. Please try again.");
@@ -98,12 +117,22 @@ export function AuthForm({ mode }: AuthFormProps) {
           <div className="grid w-full items-center gap-4">
             <div className="flex flex-col space-y-1.5">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="Enter your email" {...register("email")} />
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                {...register("email", { required: "Email is required" })}
+              />
               {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
             </div>
             <div className="flex flex-col space-y-1.5">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" placeholder="Enter your password" {...register("password")} />
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                {...register("password", { required: "Password is required" })}
+              />
               {errors.password && <p className="text-sm text-red-500">{errors.password.message}</p>}
             </div>
             {mode === "register" && (
@@ -113,9 +142,11 @@ export function AuthForm({ mode }: AuthFormProps) {
                   id="confirmPassword"
                   type="password"
                   placeholder="Confirm your password"
-                  {...register("confirmPassword")}
+                  {...register("confirmPassword", { required: "Confirm Password is required" })}
                 />
-                {errors.confirmPassword && <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>}
+                {errors.confirmPassword && (
+                  <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
+                )}
               </div>
             )}
           </div>
@@ -125,7 +156,6 @@ export function AuthForm({ mode }: AuthFormProps) {
         <Button className="w-full" onClick={handleSubmit(onSubmit)}>
           {mode === "login" ? "Login" : "Register"}
         </Button>
-        {/* Add other login options like Google, Facebook, etc. here */}
         {serverError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />

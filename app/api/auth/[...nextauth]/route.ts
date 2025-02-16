@@ -2,10 +2,11 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
+import type { AuthOptions } from "next-auth";
 
 const prisma = new PrismaClient();
 
-export const authOptions = {
+export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -18,51 +19,46 @@ export const authOptions = {
           throw new Error("Email and password are required");
         }
 
-        // Find the user in the database
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });
-
-        console.log("User from DB:", user); // Debugging
 
         if (!user) {
           throw new Error("User not found");
         }
 
-        // Verify the password
         const isValidPassword = await bcrypt.compare(
           credentials.password,
-          user.password
+          user.hashedPassword
         );
-
-        console.log("Password Valid:", isValidPassword); // Debugging
 
         if (!isValidPassword) {
           throw new Error("Invalid password");
         }
 
-        // Return the user object if credentials are valid
-        return { id: user.id, email: user.email };
+        return { id: user.id, email: user.email }; // Return user data
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
+      // Add the user's ID to the token if the user is authenticated
       if (user) {
         token.id = user.id;
-        token.email = user.email;
       }
       return token;
     },
     async session({ session, token }) {
-      session.user.id = token.id;
-      session.user.email = token.email;
+      // Add the user's ID to the session if it exists in the token
+      if (session.user && token.id) {
+        session.user.id = token.id;
+      }
       return session;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET, // VERY IMPORTANT: Set this in your environment variables
   pages: {
-    signIn: "/login",
+    signIn: "/login", // Customize your login page route
   },
 };
 
